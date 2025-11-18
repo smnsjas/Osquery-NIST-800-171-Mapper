@@ -161,7 +161,7 @@ controls:
     control_title: "Limit unsuccessful logon attempts"
     control_family: "Access Control"
     nist_description: "Limit the number of unsuccessful logon attempts."
-    automation_level: "fully_automated"
+    automation_level: "partially_automated"
 
     osquery_tables:
       - registry
@@ -170,20 +170,22 @@ controls:
       - query_id: "ac_3.1.8_lockout_threshold"
         pack: "ac_access_control.conf"
         query_name: "ac_lockout_threshold"
-        description: "Check account lockout threshold policy"
+        description: "Check account lockout threshold policy via registry (NOTE: Stored in SAM binary format)"
         rationale: "Account lockout prevents brute-force password attacks"
-        query: "SELECT name, type, data FROM registry WHERE path LIKE 'HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\System\\%' AND name IN ('LockoutBadCount', 'LockoutDuration', 'ResetLockoutCount');"
+        query: "SELECT name, type, data FROM registry WHERE key = 'HKEY_LOCAL_MACHINE\\SAM\\SAM\\Domains\\Account' AND name = 'F';"
         severity: "high"
         expected_result:
-          type: "threshold"
-          description: "LockoutBadCount should be <= 10 (NIST recommends 3-5); LockoutDuration should be >= 15 minutes"
+          type: "existence"
+          description: "Policy should exist in SAM database. Values are in binary format and require parsing or use external tools (secedit, auditpol, PowerShell Get-LocalSecurityPolicy)."
 
     assessment_criteria:
-      pass: "Account lockout is configured with <= 10 failed attempts (recommend 3-5)"
-      fail: "Account lockout is disabled OR threshold is too high (>10 attempts)"
-      inconclusive: "Registry keys not found (may use domain GPO)"
+      pass: "Account lockout policy exists in SAM; verification requires external tool (secedit export or PowerShell)"
+      fail: "Unable to access SAM account lockout settings"
+      inconclusive: "Registry query returns binary data; requires secedit.exe export for human-readable values"
 
     remediation:
+      - "Verify current settings: secedit /export /cfg C:\\secconfig.cfg && type C:\\secconfig.cfg | findstr /i lockout"
+      - "Check via PowerShell: net accounts (shows account lockout threshold)"
       - "Configure via Group Policy: Computer Configuration > Windows Settings > Security Settings > Account Policies > Account Lockout Policy"
       - "Set 'Account lockout threshold' to 5 invalid logon attempts"
       - "Set 'Account lockout duration' to 30 minutes"
@@ -191,9 +193,11 @@ controls:
       - "For domain systems, configure via Active Directory GPO"
 
     limitations:
-      - "Local policy may be overridden by domain GPO"
-      - "Does not monitor actual failed login attempts (requires event log analysis)"
-      - "Registry location may vary; some settings only accessible via SAM API"
+      - "Account lockout settings stored in SAM binary format (not easily queryable via osquery registry table)"
+      - "Recommended approach: Use PowerShell or secedit.exe to export and parse settings"
+      - "Local policy may be overridden by domain GPO on domain-joined systems"
+      - "Does not monitor actual failed login attempts (requires event log analysis Event ID 4625)"
+      - "osquery cannot parse SAM binary format directly - external tooling required"
 
     references:
       - url: "https://csrc.nist.gov/publications/detail/sp/800-171/rev-2/final"
@@ -318,7 +322,7 @@ controls:
     control_title: "Enforce a minimum password complexity and change of characters when new passwords are created"
     control_family: "Identification and Authentication"
     nist_description: "Enforce a minimum password complexity and change of characters when new passwords are created."
-    automation_level: "fully_automated"
+    automation_level: "partially_automated"
 
     osquery_tables:
       - registry
@@ -327,20 +331,22 @@ controls:
       - query_id: "ia_3.5.7_password_complexity"
         pack: "ia_identification_authentication.conf"
         query_name: "ia_password_policy"
-        description: "Check password complexity and minimum length requirements"
+        description: "Check password complexity and minimum length requirements (NOTE: Stored in SAM binary format)"
         rationale: "Strong password policies prevent unauthorized access via weak or easily guessed passwords"
-        query: "SELECT name, type, data FROM registry WHERE path LIKE 'HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Control\\SAM\\%' OR path LIKE 'HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\System\\%';"
+        query: "SELECT name, type, data FROM registry WHERE key = 'HKEY_LOCAL_MACHINE\\SAM\\SAM\\Domains\\Account' AND name = 'F';"
         severity: "high"
         expected_result:
-          type: "policy_check"
-          description: "Password complexity should be enabled; minimum length >= 14 characters (NIST SP 800-63B recommendation)"
+          type: "existence"
+          description: "Password policy stored in SAM binary format. Use secedit to extract: PasswordComplexity=1, MinimumPasswordLength>=14"
 
     assessment_criteria:
-      pass: "Password complexity enabled AND minimum length >= 14 characters"
+      pass: "Password complexity enabled AND minimum length >= 14 characters (verify via secedit export)"
       fail: "Password complexity disabled OR minimum length < 14 characters"
-      inconclusive: "Policy settings may be enforced via domain GPO (check domain policy)"
+      inconclusive: "Registry query returns binary data; requires secedit.exe or PowerShell for human-readable values"
 
     remediation:
+      - "Verify current settings: secedit /export /cfg C:\\secconfig.cfg && type C:\\secconfig.cfg | findstr /i password"
+      - "Check via PowerShell: net accounts (shows minimum password length)"
       - "Configure via Group Policy: Computer Configuration > Windows Settings > Security Settings > Account Policies > Password Policy"
       - "Enable 'Password must meet complexity requirements'"
       - "Set 'Minimum password length' to 14 characters (NIST recommends 8 minimum, 14 preferred)"
@@ -349,10 +355,12 @@ controls:
       - "For domain systems, configure via Active Directory Default Domain Policy"
 
     limitations:
-      - "Password policy settings primarily accessible via secedit.exe or GPO, not directly in registry"
+      - "Password policy settings stored in SAM binary format (not easily queryable via osquery registry table)"
+      - "Recommended approach: Use PowerShell Get-ADDefaultDomainPasswordPolicy or secedit.exe to export and parse settings"
       - "Local policy overridden by domain policy on domain-joined systems"
       - "Does not verify password strength of existing passwords (only policy configuration)"
-      - "NIST SP 800-63B now recommends longer passwords/passphrases without complexity in favor of length"
+      - "NIST SP 800-63B now recommends longer passwords/passphrases (minimum 8, prefer 15+) without forced complexity"
+      - "osquery cannot parse SAM binary format directly - external tooling required"
 
     references:
       - url: "https://csrc.nist.gov/publications/detail/sp/800-171/rev-2/final"
@@ -414,7 +422,10 @@ controls:
       - "Document and maintain approved open port baseline"
 
     limitations:
-      - "Does not inspect firewall rules (requires separate query)"
+      - "CRITICAL: windows_security_products table NOT compatible with Windows Server (only Windows 10/11 desktop)"
+      - "For Windows Server: Use services table to check Windows Firewall service (MpsSvc) status instead"
+      - "Alternative query for Server: SELECT name, status, start_type FROM services WHERE name = 'MpsSvc';"
+      - "Does not inspect firewall rules (requires separate query or netsh advfirewall show)"
       - "Cannot determine if traffic is actually monitored or just filtered"
       - "Does not assess network-level protections (routers, network firewalls)"
       - "Requires external baseline for port authorization"
@@ -534,6 +545,9 @@ controls:
       - "For enterprise: Deploy enterprise antivirus solution (Defender for Endpoint, Trend Micro, CrowdStrike, etc.)"
 
     limitations:
+      - "CRITICAL: windows_security_products table NOT compatible with Windows Server (only Windows 10/11 desktop)"
+      - "For Windows Server: Use services table to check Windows Defender services (WinDefend, WdNisSvc) status instead"
+      - "Alternative query for Server: SELECT name, status, start_type FROM services WHERE name IN ('WinDefend', 'WdNisSvc');"
       - "Third-party antivirus products may not report accurate status via windows_security_products"
       - "Does not verify scan results or malware detection effectiveness"
       - "Does not assess anti-malware configuration quality (exclusions, scan settings, etc.)"
