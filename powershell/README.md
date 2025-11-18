@@ -4,6 +4,10 @@
 
 This PowerShell module provides quick, dependency-free compliance assessment for Windows systems. It combines osquery results with native Windows security policy checks (secedit) to evaluate NIST SP 800-171 Rev 2 compliance.
 
+> **🚀 First Time Setup?** See [QUICKSTART.md](../QUICKSTART.md) for complete osquery installation and configuration in 15 minutes.
+>
+> **⚠️ Seeing "Inconclusive" Results?** This means osquery isn't configured yet. The module IS working - follow the [Quick Start Guide](../QUICKSTART.md).
+
 ## Features
 
 - ✅ **Windows Native** - No dependencies, runs on any Windows system with PowerShell 5.1+

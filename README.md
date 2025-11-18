@@ -6,6 +6,8 @@
 
 Automated compliance assessment framework that maps osquery queries to NIST SP 800-171 Rev 2 security controls for Windows servers and desktops.
 
+> **🚀 Quick Start Guide**: New to this project? Start with [QUICKSTART.md](QUICKSTART.md) to get your first compliance assessment running in 15 minutes!
+
 ## Overview
 
 This project provides a structured, auditable, and repeatable approach to validating NIST SP 800-171 compliance on Windows endpoints using osquery. It includes:
