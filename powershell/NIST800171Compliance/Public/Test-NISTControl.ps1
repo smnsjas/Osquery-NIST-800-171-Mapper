@@ -109,7 +109,7 @@ function Test-NISTControl {
         return $assessment
     }
     catch {
-        Write-Error "Failed to test control $ControlId: $_"
+        Write-Error "Failed to test control ${ControlId}: $_"
         throw
     }
 }
