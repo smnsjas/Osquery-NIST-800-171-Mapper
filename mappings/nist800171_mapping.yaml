@@ -1,0 +1,615 @@
+# NIST SP 800-171 Rev 2 to osquery Mapping
+#
+# This file maps NIST SP 800-171 Revision 2 security requirements to osquery queries
+# for Windows Server and Desktop systems.
+#
+# Mapping Version: 1.0.0
+# NIST SP 800-171 Version: Revision 2 (Withdrawn May 14, 2024, but still widely used for CMMC Level 2)
+# Target Platforms: Windows Server 2016+, Windows 10/11
+# osquery Version: 5.0+
+#
+# Automation Levels:
+#   - fully_automated: Technical evidence collected and assessed without human interpretation
+#   - partially_automated: Evidence collected, but requires business context or manual analysis
+#   - manual_only: Controls that cannot be assessed via endpoint telemetry
+
+version: "1.0.0"
+metadata:
+  standard: "NIST SP 800-171"
+  revision: "2"
+  publication_date: "2020-02-01"
+  target_platform: "Windows"
+  osquery_min_version: "5.0.0"
+  last_updated: "2025-11-18"
+
+controls:
+  # ===================================================================
+  # 3.1 ACCESS CONTROL (AC)
+  # ===================================================================
+
+  - control_id: "3.1.1"
+    control_title: "Limit system access to authorized users, processes acting on behalf of authorized users, and devices (including other systems)"
+    control_family: "Access Control"
+    nist_description: "Limit information system access to authorized users, processes acting on behalf of users, or devices (including other information systems)."
+    automation_level: "partially_automated"
+
+    osquery_tables:
+      - users
+      - groups
+      - user_groups
+      - logged_in_users
+
+    queries:
+      - query_id: "ac_3.1.1_local_users"
+        pack: "ac_access_control.conf"
+        query_name: "ac_local_users"
+        description: "Enumerate all local user accounts (excluding built-in system accounts)"
+        rationale: "Identifies unauthorized or unexpected local accounts that could be used for unauthorized access"
+        query: "SELECT uid, username, description, type, shell FROM users WHERE uid >= 1000 AND username NOT IN ('Guest', 'DefaultAccount', 'WDAGUtilityAccount');"
+        severity: "high"
+        expected_result:
+          type: "whitelist"
+          description: "Only authorized users should be present. Compare results against organizational authorized user baseline."
+
+      - query_id: "ac_3.1.1_admin_users"
+        pack: "ac_access_control.conf"
+        query_name: "ac_admin_users"
+        description: "List all members of the local Administrators group"
+        rationale: "Administrative accounts have elevated privileges and should be strictly controlled"
+        query: "SELECT u.username, u.uid, g.groupname FROM users u JOIN user_groups ug ON u.uid = ug.uid JOIN groups g ON ug.gid = g.gid WHERE g.groupname = 'Administrators';"
+        severity: "high"
+        expected_result:
+          type: "whitelist"
+          description: "Only authorized administrators should be members. Verify against approved administrator list."
+
+      - query_id: "ac_3.1.1_active_sessions"
+        pack: "ac_access_control.conf"
+        query_name: "ac_active_sessions"
+        description: "Monitor currently logged-in users and active sessions"
+        rationale: "Detects unauthorized active access to the system"
+        query: "SELECT user, host, time, type FROM logged_in_users WHERE type NOT IN ('system', 'boot');"
+        severity: "medium"
+        expected_result:
+          type: "review"
+          description: "Review active sessions for unauthorized users or unusual access patterns"
+
+    assessment_criteria:
+      pass: "All discovered accounts are on the authorized user list; no unauthorized sessions detected"
+      fail: "Unauthorized accounts detected OR unexpected administrative privileges granted"
+      inconclusive: "Unable to compare against authorized user baseline (external data required)"
+
+    remediation:
+      - "Remove unauthorized accounts: net user <username> /delete"
+      - "Review Active Directory group memberships for domain-joined systems"
+      - "Audit account creation logs in Event Viewer (Event ID 4720)"
+      - "Implement automated account provisioning/deprovisioning process"
+      - "Maintain documented authorized user baseline"
+
+    limitations:
+      - "Requires external authorized user list for comparison"
+      - "Does not assess domain accounts (requires Active Directory integration)"
+      - "Point-in-time snapshot - continuous monitoring requires scheduled execution"
+      - "Cannot determine if accounts are actively used vs. dormant"
+
+    references:
+      - url: "https://csrc.nist.gov/publications/detail/sp/800-171/rev-2/final"
+        title: "NIST SP 800-171 Rev 2 - Control 3.1.1"
+      - url: "https://osquery.io/schema/current#users"
+        title: "osquery users table"
+      - url: "https://osquery.io/schema/current#groups"
+        title: "osquery groups table"
+
+  - control_id: "3.1.5"
+    control_title: "Employ the principle of least privilege, including for specific security functions and privileged accounts"
+    control_family: "Access Control"
+    nist_description: "Employ the principle of least privilege, including for specific security functions and privileged accounts."
+    automation_level: "partially_automated"
+
+    osquery_tables:
+      - users
+      - user_groups
+      - groups
+      - registry
+
+    queries:
+      - query_id: "ac_3.1.5_privileged_groups"
+        pack: "ac_access_control.conf"
+        query_name: "ac_privileged_groups"
+        description: "Identify users in privileged groups (Administrators, Power Users, Remote Desktop Users)"
+        rationale: "Least privilege requires limiting membership in privileged groups"
+        query: "SELECT u.username, g.groupname, u.uid FROM users u JOIN user_groups ug ON u.uid = ug.uid JOIN groups g ON ug.gid = g.gid WHERE g.groupname IN ('Administrators', 'Power Users', 'Remote Desktop Users', 'Backup Operators', 'Server Operators');"
+        severity: "high"
+        expected_result:
+          type: "threshold"
+          description: "Minimal users should have elevated privileges. Review each membership for business justification."
+
+      - query_id: "ac_3.1.5_uac_settings"
+        pack: "ac_access_control.conf"
+        query_name: "ac_uac_settings"
+        description: "Check User Account Control (UAC) registry settings"
+        rationale: "UAC enforces least privilege by requiring elevation for administrative tasks"
+        query: "SELECT key, name, type, data FROM registry WHERE path = 'HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\System\\EnableLUA';"
+        severity: "high"
+        expected_result:
+          type: "value_match"
+          description: "EnableLUA should be set to 1 (enabled)"
+
+    assessment_criteria:
+      pass: "Privileged group membership is minimal and justified; UAC is enabled"
+      fail: "Excessive privileged accounts OR UAC is disabled"
+      inconclusive: "Requires business context to determine if privilege assignments are appropriate"
+
+    remediation:
+      - "Remove unnecessary users from privileged groups"
+      - "Enable UAC: Set HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\System\\EnableLUA to 1"
+      - "Implement role-based access control (RBAC)"
+      - "Use standard user accounts for daily operations; elevate only when necessary"
+      - "Document business justification for all privileged account assignments"
+
+    limitations:
+      - "Cannot determine if privileges are actually used or dormant"
+      - "Requires organizational policy defining appropriate privilege levels"
+      - "Does not assess application-level privileges"
+
+    references:
+      - url: "https://csrc.nist.gov/publications/detail/sp/800-171/rev-2/final"
+        title: "NIST SP 800-171 Rev 2 - Control 3.1.5"
+      - url: "https://docs.microsoft.com/en-us/windows/security/identity-protection/user-account-control/"
+        title: "Microsoft UAC Documentation"
+
+  - control_id: "3.1.8"
+    control_title: "Limit unsuccessful logon attempts"
+    control_family: "Access Control"
+    nist_description: "Limit the number of unsuccessful logon attempts."
+    automation_level: "fully_automated"
+
+    osquery_tables:
+      - registry
+
+    queries:
+      - query_id: "ac_3.1.8_lockout_threshold"
+        pack: "ac_access_control.conf"
+        query_name: "ac_lockout_threshold"
+        description: "Check account lockout threshold policy"
+        rationale: "Account lockout prevents brute-force password attacks"
+        query: "SELECT name, type, data FROM registry WHERE path LIKE 'HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\System\\%' AND name IN ('LockoutBadCount', 'LockoutDuration', 'ResetLockoutCount');"
+        severity: "high"
+        expected_result:
+          type: "threshold"
+          description: "LockoutBadCount should be <= 10 (NIST recommends 3-5); LockoutDuration should be >= 15 minutes"
+
+    assessment_criteria:
+      pass: "Account lockout is configured with <= 10 failed attempts (recommend 3-5)"
+      fail: "Account lockout is disabled OR threshold is too high (>10 attempts)"
+      inconclusive: "Registry keys not found (may use domain GPO)"
+
+    remediation:
+      - "Configure via Group Policy: Computer Configuration > Windows Settings > Security Settings > Account Policies > Account Lockout Policy"
+      - "Set 'Account lockout threshold' to 5 invalid logon attempts"
+      - "Set 'Account lockout duration' to 30 minutes"
+      - "Set 'Reset account lockout counter after' to 30 minutes"
+      - "For domain systems, configure via Active Directory GPO"
+
+    limitations:
+      - "Local policy may be overridden by domain GPO"
+      - "Does not monitor actual failed login attempts (requires event log analysis)"
+      - "Registry location may vary; some settings only accessible via SAM API"
+
+    references:
+      - url: "https://csrc.nist.gov/publications/detail/sp/800-171/rev-2/final"
+        title: "NIST SP 800-171 Rev 2 - Control 3.1.8"
+      - url: "https://docs.microsoft.com/en-us/previous-versions/windows/it-pro/windows-10/security/threat-protection/security-policy-settings/account-lockout-threshold"
+        title: "Microsoft Account Lockout Threshold Documentation"
+
+  # ===================================================================
+  # 3.3 AUDIT AND ACCOUNTABILITY (AU)
+  # ===================================================================
+
+  - control_id: "3.3.1"
+    control_title: "Create and retain system audit logs and records to the extent needed to enable the monitoring, analysis, investigation, and reporting of unlawful or unauthorized system activity"
+    control_family: "Audit and Accountability"
+    nist_description: "Create and retain system audit logs and records to the extent needed to enable the monitoring, analysis, investigation, and reporting of unlawful or unauthorized system activity."
+    automation_level: "partially_automated"
+
+    osquery_tables:
+      - registry
+
+    queries:
+      - query_id: "au_3.3.1_audit_policy"
+        pack: "au_audit_accountability.conf"
+        query_name: "au_audit_policy_settings"
+        description: "Check Windows audit policy configuration via registry"
+        rationale: "Audit logging must be enabled to detect and investigate security incidents"
+        query: "SELECT name, type, data FROM registry WHERE key LIKE 'HKEY_LOCAL_MACHINE\\Security\\Policy\\PolAdtEv\\%';"
+        severity: "high"
+        expected_result:
+          type: "existence"
+          description: "Audit policies should be configured. Key categories: Logon/Logoff, Account Management, Policy Change, Privilege Use, System Events"
+
+    assessment_criteria:
+      pass: "Audit policies are configured for critical event categories"
+      fail: "Audit policies are not configured OR audit service is disabled"
+      inconclusive: "Registry method may not reveal full audit configuration; recommend secedit.exe export"
+
+    remediation:
+      - "Configure via Group Policy: Computer Configuration > Windows Settings > Security Settings > Advanced Audit Policy Configuration"
+      - "Enable auditing for: Account Logon, Account Management, Logon/Logoff, Object Access, Policy Change, Privilege Use, System"
+      - "Use 'auditpol /get /category:*' to review current settings"
+      - "Use 'auditpol /set /category:\"Account Logon\" /success:enable /failure:enable' to configure"
+      - "Ensure Event Log service is running and configured for adequate retention"
+
+    limitations:
+      - "Advanced audit policies not fully accessible via registry (use auditpol.exe or PowerShell)"
+      - "Does not verify log retention or forwarding to SIEM"
+      - "Does not assess log storage capacity or rotation policies"
+
+    references:
+      - url: "https://csrc.nist.gov/publications/detail/sp/800-171/rev-2/final"
+        title: "NIST SP 800-171 Rev 2 - Control 3.3.1"
+      - url: "https://docs.microsoft.com/en-us/windows/security/threat-protection/auditing/advanced-security-audit-policy-settings"
+        title: "Microsoft Advanced Audit Policy Settings"
+
+  # ===================================================================
+  # 3.4 CONFIGURATION MANAGEMENT (CM)
+  # ===================================================================
+
+  - control_id: "3.4.1"
+    control_title: "Establish and maintain baseline configurations and inventories of organizational systems (including hardware, software, firmware, and documentation) throughout the respective system development life cycles"
+    control_family: "Configuration Management"
+    nist_description: "Establish and maintain baseline configurations and inventories of organizational systems."
+    automation_level: "fully_automated"
+
+    osquery_tables:
+      - programs
+      - system_info
+      - os_version
+
+    queries:
+      - query_id: "cm_3.4.1_installed_software"
+        pack: "cm_configuration_management.conf"
+        query_name: "cm_installed_programs"
+        description: "Inventory all installed software via Windows Installer"
+        rationale: "Software inventory is foundational for configuration management and vulnerability assessment"
+        query: "SELECT name, version, install_location, install_date, publisher FROM programs ORDER BY name;"
+        severity: "medium"
+        expected_result:
+          type: "inventory"
+          description: "Complete software inventory for baseline comparison and unauthorized software detection"
+
+      - query_id: "cm_3.4.1_system_info"
+        pack: "cm_configuration_management.conf"
+        query_name: "cm_system_baseline"
+        description: "Collect system hardware and OS configuration"
+        rationale: "Hardware and OS inventory establishes system baseline"
+        query: "SELECT hostname, uuid, cpu_brand, cpu_physical_cores, physical_memory, hardware_vendor, hardware_model FROM system_info;"
+        severity: "low"
+        expected_result:
+          type: "inventory"
+          description: "System hardware configuration for asset management"
+
+    assessment_criteria:
+      pass: "Complete inventory captured successfully"
+      fail: "Unable to retrieve inventory data"
+      inconclusive: "Requires comparison against approved baseline (external data)"
+
+    remediation:
+      - "Maintain approved software baseline in configuration management database (CMDB)"
+      - "Implement software whitelisting/blacklisting (AppLocker or Windows Defender Application Control)"
+      - "Schedule regular inventory collection and baseline comparison"
+      - "Investigate and remove unauthorized software"
+      - "Document system configurations in asset inventory"
+
+    limitations:
+      - "Programs table only captures MSI-installed applications (not portable apps or direct installs)"
+      - "Does not capture firmware versions"
+      - "Requires external baseline for comparison"
+
+    references:
+      - url: "https://csrc.nist.gov/publications/detail/sp/800-171/rev-2/final"
+        title: "NIST SP 800-171 Rev 2 - Control 3.4.1"
+      - url: "https://osquery.io/schema/current#programs"
+        title: "osquery programs table"
+
+  # ===================================================================
+  # 3.5 IDENTIFICATION AND AUTHENTICATION (IA)
+  # ===================================================================
+
+  - control_id: "3.5.7"
+    control_title: "Enforce a minimum password complexity and change of characters when new passwords are created"
+    control_family: "Identification and Authentication"
+    nist_description: "Enforce a minimum password complexity and change of characters when new passwords are created."
+    automation_level: "fully_automated"
+
+    osquery_tables:
+      - registry
+
+    queries:
+      - query_id: "ia_3.5.7_password_complexity"
+        pack: "ia_identification_authentication.conf"
+        query_name: "ia_password_policy"
+        description: "Check password complexity and minimum length requirements"
+        rationale: "Strong password policies prevent unauthorized access via weak or easily guessed passwords"
+        query: "SELECT name, type, data FROM registry WHERE path LIKE 'HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Control\\SAM\\%' OR path LIKE 'HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\System\\%';"
+        severity: "high"
+        expected_result:
+          type: "policy_check"
+          description: "Password complexity should be enabled; minimum length >= 14 characters (NIST SP 800-63B recommendation)"
+
+    assessment_criteria:
+      pass: "Password complexity enabled AND minimum length >= 14 characters"
+      fail: "Password complexity disabled OR minimum length < 14 characters"
+      inconclusive: "Policy settings may be enforced via domain GPO (check domain policy)"
+
+    remediation:
+      - "Configure via Group Policy: Computer Configuration > Windows Settings > Security Settings > Account Policies > Password Policy"
+      - "Enable 'Password must meet complexity requirements'"
+      - "Set 'Minimum password length' to 14 characters (NIST recommends 8 minimum, 14 preferred)"
+      - "Set 'Minimum password age' to 1 day"
+      - "Set 'Maximum password age' to 60-90 days (or use passphrases without expiration per NIST SP 800-63B)"
+      - "For domain systems, configure via Active Directory Default Domain Policy"
+
+    limitations:
+      - "Password policy settings primarily accessible via secedit.exe or GPO, not directly in registry"
+      - "Local policy overridden by domain policy on domain-joined systems"
+      - "Does not verify password strength of existing passwords (only policy configuration)"
+      - "NIST SP 800-63B now recommends longer passwords/passphrases without complexity in favor of length"
+
+    references:
+      - url: "https://csrc.nist.gov/publications/detail/sp/800-171/rev-2/final"
+        title: "NIST SP 800-171 Rev 2 - Control 3.5.7"
+      - url: "https://pages.nist.gov/800-63-3/sp800-63b.html"
+        title: "NIST SP 800-63B - Authentication and Lifecycle Management"
+      - url: "https://docs.microsoft.com/en-us/windows/security/threat-protection/security-policy-settings/password-must-meet-complexity-requirements"
+        title: "Microsoft Password Complexity Requirements"
+
+  # ===================================================================
+  # 3.13 SYSTEM AND COMMUNICATIONS PROTECTION (SC)
+  # ===================================================================
+
+  - control_id: "3.13.1"
+    control_title: "Monitor, control, and protect communications at the external boundaries and key internal boundaries of organizational systems"
+    control_family: "System and Communications Protection"
+    nist_description: "Monitor, control, and protect communications (i.e., information transmitted or received by organizational systems) at the external boundaries and key internal boundaries of organizational systems."
+    automation_level: "partially_automated"
+
+    osquery_tables:
+      - windows_security_products
+      - listening_ports
+      - process_open_sockets
+
+    queries:
+      - query_id: "sc_3.13.1_firewall_status"
+        pack: "sc_system_communications.conf"
+        query_name: "sc_firewall_enabled"
+        description: "Verify Windows Firewall is enabled and active"
+        rationale: "Firewall provides boundary protection for network communications"
+        query: "SELECT type, name, state, signatures_up_to_date FROM windows_security_products WHERE type = 'Firewall';"
+        severity: "critical"
+        expected_result:
+          type: "value_match"
+          description: "Windows Firewall state should be 'On' or 'Good'"
+
+      - query_id: "sc_3.13.1_listening_ports"
+        pack: "sc_system_communications.conf"
+        query_name: "sc_open_ports"
+        description: "Identify all listening network ports and associated processes"
+        rationale: "Unnecessary open ports expand attack surface; monitoring detects unauthorized services"
+        query: "SELECT DISTINCT lp.port, lp.protocol, lp.address, lp.pid, p.name, p.path FROM listening_ports lp LEFT JOIN processes p ON lp.pid = p.pid WHERE lp.port NOT IN (135, 139, 445) ORDER BY lp.port;"
+        severity: "medium"
+        expected_result:
+          type: "review"
+          description: "Review listening ports; only necessary services should be listening"
+
+    assessment_criteria:
+      pass: "Windows Firewall is enabled; all listening ports are authorized and necessary"
+      fail: "Windows Firewall is disabled OR unauthorized listening ports detected"
+      inconclusive: "Requires baseline of authorized services and ports for comparison"
+
+    remediation:
+      - "Enable Windows Firewall: netsh advfirewall set allprofiles state on"
+      - "Configure firewall rules to allow only necessary inbound traffic"
+      - "Disable unnecessary services: sc stop <servicename> && sc config <servicename> start=disabled"
+      - "Implement network segmentation and boundary protection"
+      - "Deploy host-based IDS/IPS for enhanced monitoring"
+      - "Document and maintain approved open port baseline"
+
+    limitations:
+      - "Does not inspect firewall rules (requires separate query)"
+      - "Cannot determine if traffic is actually monitored or just filtered"
+      - "Does not assess network-level protections (routers, network firewalls)"
+      - "Requires external baseline for port authorization"
+
+    references:
+      - url: "https://csrc.nist.gov/publications/detail/sp/800-171/rev-2/final"
+        title: "NIST SP 800-171 Rev 2 - Control 3.13.1"
+      - url: "https://osquery.io/schema/current#listening_ports"
+        title: "osquery listening_ports table"
+
+  # ===================================================================
+  # 3.14 SYSTEM AND INFORMATION INTEGRITY (SI)
+  # ===================================================================
+
+  - control_id: "3.14.1"
+    control_title: "Identify, report, and correct information and information system flaws in a timely manner"
+    control_family: "System and Information Integrity"
+    nist_description: "Identify, report, and correct information and information system flaws in a timely manner."
+    automation_level: "fully_automated"
+
+    osquery_tables:
+      - patches
+      - windows_security_products
+
+    queries:
+      - query_id: "si_3.14.1_installed_patches"
+        pack: "si_system_integrity.conf"
+        query_name: "si_windows_patches"
+        description: "List all installed Windows patches and hotfixes"
+        rationale: "Patch management is critical for vulnerability remediation"
+        query: "SELECT hotfix_id, description, installed_by, installed_on FROM patches ORDER BY installed_on DESC LIMIT 50;"
+        severity: "high"
+        expected_result:
+          type: "recency"
+          description: "Recent patches should be installed within organizational patch management SLA (typically 30 days for critical)"
+
+      - query_id: "si_3.14.1_windows_update"
+        pack: "si_system_integrity.conf"
+        query_name: "si_update_service_status"
+        description: "Check Windows Update service status"
+        rationale: "Windows Update must be running to receive security patches"
+        query: "SELECT name, display_name, status, start_type FROM services WHERE name = 'wuauserv';"
+        severity: "high"
+        expected_result:
+          type: "value_match"
+          description: "Windows Update service should be running (status = 'RUNNING') or configured to start automatically"
+
+    assessment_criteria:
+      pass: "Recent patches installed within SLA timeframe AND Windows Update service operational"
+      fail: "No recent patches installed OR Windows Update service disabled"
+      inconclusive: "Requires external vulnerability scan or patch baseline for gap analysis"
+
+    remediation:
+      - "Enable Windows Update service: sc config wuauserv start= auto && sc start wuauserv"
+      - "Install missing patches via Windows Update or WSUS"
+      - "Configure automatic updates: Computer Configuration > Administrative Templates > Windows Components > Windows Update"
+      - "For enterprise: Deploy WSUS or SCCM for centralized patch management"
+      - "Establish patch management policy: Critical patches within 30 days, High within 60 days"
+      - "Regularly scan for vulnerabilities using tools like Nessus, Qualys, or Microsoft Defender for Endpoint"
+
+    limitations:
+      - "Patches table does not include all update types (e.g., Windows Store updates, driver updates)"
+      - "Does not identify MISSING patches (requires external vulnerability assessment)"
+      - "Cannot determine criticality of installed patches"
+      - "Patch age analysis requires comparison against publication dates"
+
+    references:
+      - url: "https://csrc.nist.gov/publications/detail/sp/800-171/rev-2/final"
+        title: "NIST SP 800-171 Rev 2 - Control 3.14.1"
+      - url: "https://osquery.io/schema/current#patches"
+        title: "osquery patches table"
+
+  - control_id: "3.14.2"
+    control_title: "Provide protection from malicious code at appropriate locations within organizational systems"
+    control_family: "System and Information Integrity"
+    nist_description: "Provide protection from malicious code at appropriate locations within organizational systems."
+    automation_level: "fully_automated"
+
+    osquery_tables:
+      - windows_security_products
+      - services
+
+    queries:
+      - query_id: "si_3.14.2_antivirus_status"
+        pack: "si_system_integrity.conf"
+        query_name: "si_antivirus_enabled"
+        description: "Check antivirus/antimalware status and signature freshness"
+        rationale: "Malware protection is essential defense against malicious code"
+        query: "SELECT type, name, state, signatures_up_to_date FROM windows_security_products WHERE type IN ('Antivirus', 'Antispyware');"
+        severity: "critical"
+        expected_result:
+          type: "value_match"
+          description: "Antivirus should be enabled (state = 'On' or 'Good') AND signatures_up_to_date = 1"
+
+      - query_id: "si_3.14.2_defender_service"
+        pack: "si_system_integrity.conf"
+        query_name: "si_defender_running"
+        description: "Verify Windows Defender service is running"
+        rationale: "Windows Defender service must be active to provide real-time protection"
+        query: "SELECT name, display_name, status, start_type, path FROM services WHERE name IN ('WinDefend', 'WdNisSvc', 'Sense');"
+        severity: "critical"
+        expected_result:
+          type: "value_match"
+          description: "Windows Defender services should be running (status = 'RUNNING')"
+
+    assessment_criteria:
+      pass: "Antivirus enabled with up-to-date signatures AND service running"
+      fail: "Antivirus disabled OR signatures out of date OR service stopped"
+      inconclusive: "Third-party antivirus detected but status unknown"
+
+    remediation:
+      - "Enable Windows Defender: Set-MpPreference -DisableRealtimeMonitoring $false"
+      - "Update signatures: Update-MpSignature"
+      - "Start Windows Defender service: Start-Service WinDefend"
+      - "Configure real-time protection and cloud-delivered protection"
+      - "Schedule regular scans: Set-MpPreference -ScanScheduleDay Everyday -ScanScheduleTime 02:00:00"
+      - "For enterprise: Deploy enterprise antivirus solution (Defender for Endpoint, Trend Micro, CrowdStrike, etc.)"
+
+    limitations:
+      - "Third-party antivirus products may not report accurate status via windows_security_products"
+      - "Does not verify scan results or malware detection effectiveness"
+      - "Does not assess anti-malware configuration quality (exclusions, scan settings, etc.)"
+
+    references:
+      - url: "https://csrc.nist.gov/publications/detail/sp/800-171/rev-2/final"
+        title: "NIST SP 800-171 Rev 2 - Control 3.14.2"
+      - url: "https://docs.microsoft.com/en-us/windows/security/threat-protection/microsoft-defender-antivirus/"
+        title: "Microsoft Defender Antivirus Documentation"
+
+  - control_id: "3.14.6"
+    control_title: "Monitor organizational systems, including inbound and outbound communications traffic, to detect attacks and indicators of potential attacks"
+    control_family: "System and Information Integrity"
+    nist_description: "Monitor organizational systems, including inbound and outbound communications traffic, to detect attacks and indicators of potential attacks."
+    automation_level: "partially_automated"
+
+    osquery_tables:
+      - process_open_sockets
+      - listening_ports
+      - logged_in_users
+
+    queries:
+      - query_id: "si_3.14.6_network_connections"
+        pack: "si_system_integrity.conf"
+        query_name: "si_active_connections"
+        description: "Monitor active network connections and associated processes"
+        rationale: "Unexpected network connections may indicate compromise or malicious activity"
+        query: "SELECT pos.pid, p.name, pos.protocol, pos.local_address, pos.local_port, pos.remote_address, pos.remote_port, pos.state FROM process_open_sockets pos LEFT JOIN processes p ON pos.pid = p.pid WHERE pos.state = 'ESTABLISHED' AND pos.remote_address NOT LIKE '127.%' AND pos.remote_address NOT LIKE '::1';"
+        severity: "medium"
+        expected_result:
+          type: "review"
+          description: "Review connections for unexpected destinations or suspicious processes"
+
+      - query_id: "si_3.14.6_remote_sessions"
+        pack: "si_system_integrity.conf"
+        query_name: "si_remote_access"
+        description: "Detect remote login sessions"
+        rationale: "Remote sessions should be monitored for unauthorized access"
+        query: "SELECT user, host, time, type, sid FROM logged_in_users WHERE host IS NOT NULL AND host != 'localhost' AND host != '127.0.0.1';"
+        severity: "high"
+        expected_result:
+          type: "review"
+          description: "All remote sessions should be authorized and expected"
+
+    assessment_criteria:
+      pass: "Monitoring capabilities are in place (data collection successful)"
+      fail: "Unable to collect network activity data"
+      inconclusive: "Requires behavioral analysis and baseline for anomaly detection (SIEM/SOC function)"
+
+    remediation:
+      - "Deploy SIEM solution to aggregate and analyze osquery results"
+      - "Enable Windows Event Forwarding to centralized log collector"
+      - "Configure Windows Firewall logging for blocked and allowed connections"
+      - "Implement intrusion detection system (IDS) or endpoint detection and response (EDR)"
+      - "Establish network traffic baseline and alert on anomalies"
+      - "Monitor for indicators of compromise (IOCs) and threat intelligence feeds"
+
+    limitations:
+      - "osquery provides point-in-time snapshots, not continuous stream monitoring"
+      - "Requires external analysis platform (SIEM) for behavioral correlation"
+      - "Cannot detect encrypted malicious traffic without SSL/TLS inspection"
+      - "Does not provide automated threat detection (manual or SIEM-based analysis required)"
+
+    references:
+      - url: "https://csrc.nist.gov/publications/detail/sp/800-171/rev-2/final"
+        title: "NIST SP 800-171 Rev 2 - Control 3.14.6"
+      - url: "https://osquery.io/schema/current#process_open_sockets"
+        title: "osquery process_open_sockets table"
+
+# End of NIST SP 800-171 Rev 2 Mappings
+#
+# Note: This is an initial mapping covering high-priority controls across key control families.
+# Additional controls and queries will be added in future iterations.
+#
+# For complete control coverage, implement compensating controls for:
+# - Manual-only controls (training, physical security, policies)
+# - Partially automated controls (require external data or human judgment)
+#
+# Always consult with qualified security professionals for compliance validation.
