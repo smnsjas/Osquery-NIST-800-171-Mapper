@@ -1,0 +1,94 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+.venv/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+*.cover
+.hypothesis/
+
+# Logs and databases
+*.log
+*.db
+*.sqlite
+*.sqlite3
+
+# osquery specific
+osqueryd.results.log
+osqueryd.INFO
+osqueryd.WARNING
+osqueryd.ERROR
+*.db/
+*.pidfile
+
+# Reports and output
+reports/
+output/
+*.json
+*.csv
+!mappings/*.json
+!packs/*.json
+!packs/*.conf
+
+# Temporary files
+*.tmp
+*.bak
+*.backup
+temp/
+tmp/
+
+# Credentials and secrets
+.env
+.env.local
+secrets.yaml
+credentials.json
+*.key
+*.pem
+
+# OS specific
+Thumbs.db
+Desktop.ini
+
+# Documentation builds
+docs/_build/
+site/
