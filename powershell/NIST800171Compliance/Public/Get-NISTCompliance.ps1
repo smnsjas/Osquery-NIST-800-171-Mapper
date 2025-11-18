@@ -38,6 +38,7 @@ function Get-NISTCompliance {
     #>
 
     [CmdletBinding()]
+    [OutputType([PSCustomObject])]
     param(
         [Parameter()]
         [string]$OsqueryResultsPath,

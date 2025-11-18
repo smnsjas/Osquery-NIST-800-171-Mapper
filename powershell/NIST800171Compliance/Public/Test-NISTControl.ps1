@@ -29,6 +29,7 @@ function Test-NISTControl {
     #>
 
     [CmdletBinding()]
+    [OutputType([PSCustomObject])]
     param(
         [Parameter(Mandatory)]
         [string]$ControlId,

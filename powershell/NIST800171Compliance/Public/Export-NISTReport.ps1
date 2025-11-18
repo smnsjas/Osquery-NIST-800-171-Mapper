@@ -24,7 +24,8 @@ function Export-NISTReport {
         Get-NISTCompliance | Export-NISTReport -OutputPath ".\report.json" -Format JSON
     #>
 
-    [CmdletBinding()]
+    [CmdletBinding(SupportsShouldProcess, ConfirmImpact='Low')]
+    [OutputType([void])]
     param(
         [Parameter(Mandatory, ValueFromPipeline)]
         [PSCustomObject]$ComplianceData,
@@ -45,13 +46,35 @@ function Export-NISTReport {
                         $OutputPath = "NIST_800-171_Compliance_$(Get-Date -Format 'yyyyMMdd_HHmmss').json"
                     }
 
-                    $ComplianceData | ConvertTo-Json -Depth 10 | Out-File -FilePath $OutputPath -Encoding UTF8
-                    Write-Host "JSON report exported to: $OutputPath" -ForegroundColor Green
+                    # Resolve to absolute path
+                    $OutputPath = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($OutputPath)
+
+                    # Ensure directory exists
+                    $outputDir = Split-Path -Path $OutputPath -Parent
+                    if ($outputDir -and -not (Test-Path $outputDir)) {
+                        New-Item -Path $outputDir -ItemType Directory -Force | Out-Null
+                    }
+
+                    if ($PSCmdlet.ShouldProcess($OutputPath, "Export JSON compliance report")) {
+                        $json = $ComplianceData | ConvertTo-Json -Depth 10
+                        # Use Set-Content for consistent UTF8 encoding across PS versions
+                        Set-Content -Path $OutputPath -Value $json -Encoding UTF8
+                        Write-Host "JSON report exported to: $OutputPath" -ForegroundColor Green
+                    }
                 }
 
                 'CSV' {
                     if (-not $OutputPath) {
                         $OutputPath = "NIST_800-171_Compliance_$(Get-Date -Format 'yyyyMMdd_HHmmss').csv"
+                    }
+
+                    # Resolve to absolute path
+                    $OutputPath = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($OutputPath)
+
+                    # Ensure directory exists
+                    $outputDir = Split-Path -Path $OutputPath -Parent
+                    if ($outputDir -and -not (Test-Path $outputDir)) {
+                        New-Item -Path $outputDir -ItemType Directory -Force | Out-Null
                     }
 
                     $csvData = $ComplianceData.Controls | Select-Object `
@@ -60,8 +83,10 @@ function Export-NISTReport {
                         @{Name='RecommendationsCount';Expression={$_.Recommendations.Count}}, `
                         Timestamp
 
-                    $csvData | Export-Csv -Path $OutputPath -NoTypeInformation -Encoding UTF8
-                    Write-Host "CSV report exported to: $OutputPath" -ForegroundColor Green
+                    if ($PSCmdlet.ShouldProcess($OutputPath, "Export CSV compliance report")) {
+                        $csvData | Export-Csv -Path $OutputPath -NoTypeInformation -Encoding UTF8
+                        Write-Host "CSV report exported to: $OutputPath" -ForegroundColor Green
+                    }
                 }
 
                 'HTML' {
@@ -69,9 +94,22 @@ function Export-NISTReport {
                         $OutputPath = "NIST_800-171_Compliance_$(Get-Date -Format 'yyyyMMdd_HHmmss').html"
                     }
 
+                    # Resolve to absolute path
+                    $OutputPath = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($OutputPath)
+
+                    # Ensure directory exists
+                    $outputDir = Split-Path -Path $OutputPath -Parent
+                    if ($outputDir -and -not (Test-Path $outputDir)) {
+                        New-Item -Path $outputDir -ItemType Directory -Force | Out-Null
+                    }
+
                     $html = Generate-HTMLReport -ComplianceData $ComplianceData
-                    $html | Out-File -FilePath $OutputPath -Encoding UTF8
-                    Write-Host "HTML report exported to: $OutputPath" -ForegroundColor Green
+
+                    if ($PSCmdlet.ShouldProcess($OutputPath, "Export HTML compliance report")) {
+                        # Use Set-Content for consistent UTF8 encoding across PS versions
+                        Set-Content -Path $OutputPath -Value $html -Encoding UTF8
+                        Write-Host "HTML report exported to: $OutputPath" -ForegroundColor Green
+                    }
                 }
 
                 'Console' {

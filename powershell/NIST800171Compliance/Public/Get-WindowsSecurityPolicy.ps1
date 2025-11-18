@@ -21,6 +21,7 @@ function Get-WindowsSecurityPolicy {
     #>
 
     [CmdletBinding()]
+    [OutputType([PSCustomObject])]
     param()
 
     begin {
