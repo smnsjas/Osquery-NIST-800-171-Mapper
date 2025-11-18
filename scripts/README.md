@@ -1,8 +1,204 @@
-# Compliance Reporting Scripts
+# NIST 800-171 Compliance Scripts
 
-This directory contains Python scripts for processing osquery results and generating NIST 800-171 compliance reports.
+This directory contains scripts for integrating Windows security policy data into osquery and generating compliance reports.
 
-## Scripts
+## Current Scripts (PowerShell - Production Ready)
+
+### Export-SecurityPolicy.ps1
+
+**Exports Windows security policy to JSON for osquery consumption.**
+
+Makes password and account lockout policies (stored in SAM database) available to osquery via the `file` table. This enables backend-agnostic compliance monitoring that works with Fleet, osctrl, or standalone osquery.
+
+**What it does:**
+- Runs `secedit /export` to extract SAM policies
+- Parses account lockout settings (threshold, duration, window)
+- Parses password policy settings (length, complexity, age, history)
+- Adds NIST 800-171 compliance flags
+- Outputs to `C:\ProgramData\osquery\security_policy.json`
+
+**Usage:**
+```powershell
+# Run manually
+.\Export-SecurityPolicy.ps1
+
+# Run with custom output path
+.\Export-SecurityPolicy.ps1 -OutputPath "C:\Custom\Path\policy.json"
+
+# Run with verbose output
+.\Export-SecurityPolicy.ps1 -Verbose
+```
+
+**Output Example:**
+```json
+{
+  "account_lockout": {
+    "lockout_threshold": 5,
+    "lockout_duration": 30,
+    "lockout_window": 30,
+    "configured": true
+  },
+  "password_policy": {
+    "min_password_length": 14,
+    "password_complexity": 1,
+    "min_password_age": 1,
+    "max_password_age": 90,
+    "password_history": 24,
+    "reversible_encryption": 0,
+    "configured": true
+  },
+  "compliance": {
+    "nist_3_1_8_lockout_configured": true,
+    "nist_3_5_7_password_length_ok": true,
+    "nist_3_5_7_password_length_recommended": true,
+    "nist_3_5_7_complexity_enabled": true,
+    "overall_compliant": true
+  },
+  "metadata": {
+    "timestamp": "2025-11-18T18:30:00Z",
+    "hostname": "SERVER01",
+    "export_method": "secedit",
+    "version": "1.0"
+  }
+}
+```
+
+### Install-SecurityPolicyExport.ps1
+
+**Installs Windows scheduled task to automate policy export.**
+
+Creates a scheduled task that runs `Export-SecurityPolicy.ps1` every hour, ensuring osquery always has fresh policy data.
+
+**Usage:**
+```powershell
+# Install with default settings (every 1 hour)
+.\Install-SecurityPolicyExport.ps1
+
+# Install with 2-hour interval
+.\Install-SecurityPolicyExport.ps1 -IntervalHours 2
+
+# Use custom script location
+.\Install-SecurityPolicyExport.ps1 -ScriptPath "C:\Custom\Export-SecurityPolicy.ps1"
+```
+
+**Verification:**
+```powershell
+# Check task exists
+Get-ScheduledTask -TaskName "Export Security Policy for osquery"
+
+# Run manually
+Start-ScheduledTask -TaskName "Export Security Policy for osquery"
+
+# Check output file
+Get-Content C:\ProgramData\osquery\security_policy.json | ConvertFrom-Json
+```
+
+---
+
+## Quick Start
+
+### Step 1: Install the Scheduled Task
+
+```powershell
+# Run as Administrator
+cd scripts
+.\Install-SecurityPolicyExport.ps1
+```
+
+**Expected output:**
+```
+Installing Security Policy Export Task
+=======================================
+
+[1/4] Creating scheduled task action...
+  ✓ Action created
+[2/4] Creating scheduled task trigger...
+  ✓ Trigger created (every 1 hour(s))
+[3/4] Configuring task principal...
+  ✓ Principal configured (SYSTEM)
+[4/4] Registering scheduled task...
+  ✓ Task registered successfully
+
+Installation Complete!
+
+Current Policy Settings:
+  Lockout Threshold: 5
+  Min Password Length: 14
+  Password Complexity: 1
+  Overall Compliant: True
+```
+
+### Step 2: Query via osquery
+
+The policy data is now available to osquery. Query packs have been updated with file-based queries.
+
+**Test with osqueryi:**
+```powershell
+& "C:\Program Files\osquery\osqueryi.exe" @"
+SELECT
+  JSON_EXTRACT(data, '$.account_lockout.lockout_threshold') AS lockout_threshold,
+  JSON_EXTRACT(data, '$.compliance.nist_3_1_8_lockout_configured') AS compliant
+FROM (SELECT file.data AS data FROM file WHERE path = 'C:\ProgramData\osquery\security_policy.json');
+"@
+```
+
+### Step 3: Enable in osquery Configuration
+
+Ensure packs are loaded in `osquery.conf`:
+
+```json
+{
+  "packs": {
+    "nist_access_control": "C:\\Program Files\\osquery\\packs\\ac_access_control.conf",
+    "nist_identification_auth": "C:\\Program Files\\osquery\\packs\\ia_identification_authentication.conf"
+  }
+}
+```
+
+The packs include:
+- `ac_lockout_policy_file` - NIST 3.1.8 compliance check
+- `ia_password_policy_file` - NIST 3.5.7 compliance check
+
+### Step 4: View in Fleet/osctrl
+
+Policy data flows through osquery logs to any backend:
+
+**Fleet:**
+- Queries → Run live queries on endpoints
+- Policies → Create compliance policies
+- Dashboards → View aggregated results
+
+**osctrl:**
+- Queries → Add to environment queries
+- View results in dashboard
+
+---
+
+## Architecture
+
+```
+Windows Task Scheduler (hourly)
+    └─> Export-SecurityPolicy.ps1
+        └─> secedit /export
+        └─> Parse & add compliance flags
+        └─> Write JSON
+            ▼
+C:\ProgramData\osquery\security_policy.json
+            ▼
+osquery (file table)
+    └─> Scheduled queries read JSON
+    └─> Extract compliance data
+    └─> Log to osqueryd.results.log
+            ▼
+Backend (Fleet / osctrl / SIEM)
+    └─> Consume osquery logs
+    └─> Display dashboards
+    └─> Alert on violations
+```
+
+---
+
+## Planned Scripts (Python - Future Enhancement)
 
 ### generate_report.py
 
