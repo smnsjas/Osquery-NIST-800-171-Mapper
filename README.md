@@ -28,12 +28,14 @@ Leverage osquery's endpoint visibility to automatically collect technical eviden
 
 ## Features
 
-- **110 Control Coverage**: Mapping framework for all NIST SP 800-171 Rev 2 controls
+- **26% Automated Coverage**: 29 of 110 NIST SP 800-171 Rev 2 controls with osquery queries (expanding)
 - **Windows-Focused**: Optimized for Windows Server 2016+ and Windows 10/11
 - **Automation Levels**: Controls classified as fully automated, partially automated, or manual
-- **Multiple Output Formats**: JSON, YAML, HTML, and CSV compliance reports
+- **Backend-Agnostic**: Works with Fleet, osctrl, standalone osquery, or any TLS endpoint
 - **Open Source**: Transparent methodology, community-driven improvements
 - **SIEM Integration**: Compatible with Splunk, Elastic, and other log aggregation platforms
+
+**Coverage Details**: See [COVERAGE.md](docs/COVERAGE.md) for complete control matrix and automation roadmap
 
 ## Quick Start
 
@@ -108,28 +110,27 @@ Compliance data now flows to your osquery backend (Fleet, osctrl, or SIEM).
 ```
 osquery-nist-mapper/
 ├── packs/                      # osquery query packs by control family
-│   ├── ac_access_control.conf
-│   ├── au_audit_accountability.conf
-│   ├── cm_configuration_management.conf
-│   ├── ia_identification_authentication.conf
-│   ├── sc_system_communications.conf
-│   ├── si_system_integrity.conf
-│   └── README.md
+│   ├── ac_access_control.conf          # 3.1.x - Access Control (9 queries)
+│   ├── au_audit_accountability.conf    # 3.3.x - Audit (2 queries)
+│   ├── cm_configuration_management.conf # 3.4.x - Configuration Mgmt (6 queries)
+│   ├── ia_identification_authentication.conf # 3.5.x - Identity (2 queries)
+│   ├── ra_risk_assessment.conf         # 3.11.x - Risk Assessment (1 query)
+│   ├── sc_system_communications.conf   # 3.13.x - System Comms (3 queries)
+│   └── si_system_integrity.conf        # 3.14.x - System Integrity (8 queries)
 ├── mappings/                   # Control-to-query mappings
-│   ├── nist800171_mapping.yaml
+│   └── nist800171_mapping.yaml
+├── scripts/                    # PowerShell automation scripts
+│   ├── Export-SecurityPolicy.ps1       # Export SAM policies to JSON
+│   ├── Install-SecurityPolicyExport.ps1 # Install scheduled task
 │   └── README.md
-├── scripts/                    # Reporting and automation
-│   ├── generate_report.py
-│   ├── validate_mappings.py
-│   ├── test_queries.py
-│   ├── requirements.txt
-│   └── README.md
+├── powershell/                 # PowerShell compliance module
+│   └── NIST800171Compliance/           # Local assessment module
 ├── docs/                       # Documentation
+│   ├── COVERAGE.md                     # Complete 110-control matrix
 │   ├── mapping_guide.md
-│   ├── osquery_install_windows.md
-│   └── README.md
+│   └── osquery_install_windows.md
+├── ARCHITECTURE.md             # Technical architecture
 ├── CLAUDE.md                   # AI assistant guidelines
-├── .gitignore
 └── README.md                   # This file
 ```
 
@@ -149,6 +150,22 @@ Correlating technical telemetry from osquery to specific NIST control requiremen
 - **Fully Automated**: Technical evidence collected and assessed without human interpretation
 - **Partially Automated**: Evidence collected, but requires business context or manual analysis
 - **Manual Only**: Controls that cannot be assessed via endpoint telemetry (e.g., training, physical security)
+
+## Current Coverage (29/110 Controls - 26%)
+
+| Control Family | Total Controls | Automated | Coverage |
+|----------------|----------------|-----------|----------|
+| 3.1 Access Control | 22 | 9 | 41% |
+| 3.3 Audit & Accountability | 9 | 2 | 22% |
+| 3.4 Configuration Management | 9 | 6 | 67% |
+| 3.5 Identification & Authentication | 11 | 2 | 18% |
+| 3.11 Risk Assessment | 4 | 1 | 25% |
+| 3.13 System Communications | 16 | 3 | 19% |
+| 3.14 System & Information Integrity | 13 | 8 | 62% |
+| **Other families** | 26 | 0 | 0% |
+| **TOTAL** | **110** | **29** | **26%** |
+
+**See [COVERAGE.md](docs/COVERAGE.md) for detailed control-by-control breakdown.**
 
 ## Documentation
 
