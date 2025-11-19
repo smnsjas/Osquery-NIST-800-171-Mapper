@@ -58,8 +58,9 @@ $queryStats.GetEnumerator() | Sort-Object Name | ForEach-Object {
     $stats = $_.Value
 
     # Strip pack prefix for display
+    # Query names always start with control family code: ac_, au_, cm_, ia_, ra_, sc_, si_
     $displayName = $name
-    if ($name -match '^pack_nist_[^_]+_(.+)$') {
+    if ($name -match '((?:ac|au|cm|ia|ra|sc|si)_.+)$') {
         $displayName = $matches[1]
     }
 
@@ -105,7 +106,13 @@ foreach ($expected in $expectedQueries) {
     # Check if we have this query (with or without pack prefix)
     $found = $false
     foreach ($actual in $queryStats.Keys) {
-        if ($actual -eq $expected -or $actual -match "_$expected$") {
+        # Normalize the actual query name same way parser does
+        $normalizedName = $actual
+        if ($actual -match '((?:ac|au|cm|ia|ra|sc|si)_.+)$') {
+            $normalizedName = $matches[1]
+        }
+
+        if ($normalizedName -eq $expected) {
             $foundQueries += $expected
             $found = $true
             break

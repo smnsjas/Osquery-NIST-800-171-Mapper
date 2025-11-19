@@ -44,7 +44,8 @@ function Parse-OsqueryResults {
                     # Normalize query name: strip pack prefix if present
                     # osquery packs add prefix like: pack_nist_configuration_management_cm_startup_items
                     # We need to extract just: cm_startup_items
-                    if ($queryName -match '^pack_nist_[^_]+_(.+)$') {
+                    # Query names always start with control family code: ac_, au_, cm_, ia_, ra_, sc_, si_
+                    if ($queryName -match '((?:ac|au|cm|ia|ra|sc|si)_.+)$') {
                         $queryName = $matches[1]
                         Write-Verbose "Normalized query name: $($json.name) -> $queryName"
                     }
