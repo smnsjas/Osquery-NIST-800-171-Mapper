@@ -58,6 +58,16 @@ Get-NISTCompliance | Export-NISTReport -OutputPath .\report.html -Format HTML
 
 **Note**: This works immediately for password/lockout policies. For full coverage, set up osquery (Option B).
 
+**Getting "Inconclusive" results?** If you have osquery installed but see "Query results not found", run the deployment script:
+
+```powershell
+# Deploy all 34 compliance queries to osquery
+.\scripts\Deploy-OsqueryCompliance.ps1
+
+# Wait 5-10 minutes, then re-run the report
+Get-NISTCompliance | Export-NISTReport -Format Console
+```
+
 ### Option B: Central Monitoring (Fleet/osctrl Integration)
 
 **Use Case**: Continuous compliance monitoring across your Windows fleet
