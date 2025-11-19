@@ -6,8 +6,6 @@
 
 Automated compliance assessment framework that maps osquery queries to NIST SP 800-171 Rev 2 security controls for Windows servers and desktops.
 
-> **🚀 Quick Start Guide**: New to this project? Start with [QUICKSTART.md](QUICKSTART.md) to get your first compliance assessment running in 15 minutes!
-
 ## Overview
 
 This project provides a structured, auditable, and repeatable approach to validating NIST SP 800-171 compliance on Windows endpoints using osquery. It includes:
@@ -39,54 +37,71 @@ Leverage osquery's endpoint visibility to automatically collect technical eviden
 
 ## Quick Start
 
-### 1. Install osquery on Windows
+Choose your deployment approach:
+
+### Option A: Local Testing (PowerShell Module)
+
+**Use Case**: Quick compliance checks on individual Windows systems
+
+```powershell
+# 1. Import the PowerShell module
+Import-Module .\powershell\NIST800171Compliance
+
+# 2. Run compliance assessment
+Get-NISTCompliance | Export-NISTReport -Format Console
+
+# 3. Generate HTML report
+Get-NISTCompliance | Export-NISTReport -OutputPath .\report.html -Format HTML
+```
+
+**Note**: This works immediately for password/lockout policies. For full coverage, set up osquery (Option B).
+
+### Option B: Central Monitoring (Fleet/osctrl Integration)
+
+**Use Case**: Continuous compliance monitoring across your Windows fleet
+
+**Step 1: Install osquery**
 
 ```powershell
 # Download and install osquery
-Invoke-WebRequest -Uri https://pkg.osquery.io/windows/osquery-5.11.0.msi -OutFile osquery.msi
+$version = "5.11.0"
+Invoke-WebRequest -Uri "https://pkg.osquery.io/windows/osquery-$version.msi" -OutFile osquery.msi
 Start-Process msiexec.exe -Wait -ArgumentList "/i osquery.msi /quiet /norestart"
 ```
 
-See [osquery installation guide](docs/osquery_install_windows.md) for detailed instructions.
-
-### 2. Clone This Repository
-
-```bash
-git clone https://github.com/your-org/osquery-nist-mapper.git
-cd osquery-nist-mapper
-```
-
-### 3. Deploy Query Packs
+**Step 2: Deploy compliance data export**
 
 ```powershell
-# Copy packs to osquery installation
+# Run as Administrator
+.\scripts\Install-SecurityPolicyExport.ps1
+```
+
+This installs a scheduled task that exports Windows security policies hourly for osquery to read.
+
+**Step 3: Deploy query packs**
+
+```powershell
+# Copy packs to osquery
 Copy-Item .\packs\*.conf "C:\Program Files\osquery\packs\"
 
-# Configure osquery to use packs (edit osquery.conf)
+# Update osquery.conf to include packs
+# See docs/osquery_install_windows.md for configuration details
 ```
 
-### 4. Run osquery and Collect Results
+**Step 4: Start osquery**
 
 ```powershell
-# Start osquery service
 Start-Service osqueryd
-
-# Monitor results
-Get-Content "C:\Program Files\osquery\log\osqueryd.results.log" -Wait
+Set-Service osqueryd -StartupType Automatic
 ```
 
-### 5. Generate Compliance Report
+**Step 5: View in Fleet/osctrl**
 
-```bash
-# Install Python dependencies
-pip install -r scripts/requirements.txt
+Compliance data now flows to your osquery backend (Fleet, osctrl, or SIEM).
 
-# Generate report
-python scripts/generate_report.py \
-  --results "C:\Program Files\osquery\log\osqueryd.results.log" \
-  --output compliance_report.json \
-  --format json
-```
+---
+
+**Detailed Setup**: See [osquery installation guide](docs/osquery_install_windows.md) for complete instructions.
 
 ## Project Structure
 
