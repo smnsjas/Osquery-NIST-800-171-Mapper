@@ -30,7 +30,8 @@ $osqueryPaths = @(
 
 $osqueryRoot = $null
 foreach ($path in $osqueryPaths) {
-    if (Test-Path "$path\osqueryd.exe") {
+    # Check for either osqueryi.exe or osqueryd.exe
+    if ((Test-Path "$path\osqueryi.exe") -or (Test-Path "$path\osqueryd.exe")) {
         $osqueryRoot = $path
         break
     }
