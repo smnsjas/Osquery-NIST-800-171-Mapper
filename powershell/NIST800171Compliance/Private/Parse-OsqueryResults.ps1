@@ -41,9 +41,18 @@ function Parse-OsqueryResults {
                 if ($json.name) {
                     $queryName = $json.name
 
+                    # Normalize query name: strip pack prefix if present
+                    # osquery packs add prefix like: pack_nist_configuration_management_cm_startup_items
+                    # We need to extract just: cm_startup_items
+                    if ($queryName -match '^pack_nist_[^_]+_(.+)$') {
+                        $queryName = $matches[1]
+                        Write-Verbose "Normalized query name: $($json.name) -> $queryName"
+                    }
+
                     if (-not $results.ContainsKey($queryName)) {
                         $results[$queryName] = @{
                             QueryName = $queryName
+                            OriginalName = $json.name
                             Results = @()
                             LatestTimestamp = $json.unixTime
                             HostIdentifier = $json.hostIdentifier
