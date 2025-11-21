@@ -307,16 +307,41 @@ function Write-ComplianceToConsole {
                         $row = $results[$i]
                         Write-Host "        Row $($i+1):" -ForegroundColor DarkGray
 
-                        # Display each property on its own line, skip empty values
-                        $row.PSObject.Properties | Where-Object {
-                            -not [string]::IsNullOrWhiteSpace($_.Value)
-                        } | ForEach-Object {
-                            $value = if ($_.Value.Length -gt 60) {
-                                $_.Value.Substring(0, 57) + "..."
-                            } else {
-                                $_.Value
+                        # For installed programs, always show name first (even if empty)
+                        if ($queryName -like "*installed_programs*") {
+                            $nameProp = $row.PSObject.Properties | Where-Object { $_.Name -eq 'name' } | Select-Object -First 1
+                            if ($nameProp) {
+                                $nameValue = if ([string]::IsNullOrWhiteSpace($nameProp.Value)) {
+                                    "(unnamed program)"
+                                } else {
+                                    $nameProp.Value
+                                }
+                                Write-Host "          name: $nameValue" -ForegroundColor Gray
                             }
-                            Write-Host "          $($_.Name): $value" -ForegroundColor Gray
+
+                            # Then show other properties (except name)
+                            $row.PSObject.Properties | Where-Object {
+                                $_.Name -ne 'name' -and -not [string]::IsNullOrWhiteSpace($_.Value)
+                            } | ForEach-Object {
+                                $value = if ($_.Value.Length -gt 60) {
+                                    $_.Value.Substring(0, 57) + "..."
+                                } else {
+                                    $_.Value
+                                }
+                                Write-Host "          $($_.Name): $value" -ForegroundColor Gray
+                            }
+                        } else {
+                            # Display each property on its own line, skip empty values
+                            $row.PSObject.Properties | Where-Object {
+                                -not [string]::IsNullOrWhiteSpace($_.Value)
+                            } | ForEach-Object {
+                                $value = if ($_.Value.Length -gt 60) {
+                                    $_.Value.Substring(0, 57) + "..."
+                                } else {
+                                    $_.Value
+                                }
+                                Write-Host "          $($_.Name): $value" -ForegroundColor Gray
+                            }
                         }
                     }
 

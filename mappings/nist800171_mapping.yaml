@@ -169,14 +169,14 @@ controls:
     queries:
       - query_id: "ac_3.1.8_lockout_threshold"
         pack: "ac_access_control.conf"
-        query_name: "ac_lockout_threshold"
-        description: "Check account lockout threshold policy via registry (NOTE: Stored in SAM binary format)"
+        query_name: "ac_lockout_policy_file"
+        description: "Check account lockout threshold policy from exported security policy JSON file"
         rationale: "Account lockout prevents brute-force password attacks"
-        query: "SELECT name, type, data FROM registry WHERE key = 'HKEY_LOCAL_MACHINE\\SAM\\SAM\\Domains\\Account' AND name = 'F';"
+        query: "SELECT JSON_EXTRACT(data, '$.account_lockout.lockout_threshold') AS lockout_threshold, JSON_EXTRACT(data, '$.account_lockout.lockout_duration') AS lockout_duration FROM (SELECT file.data AS data FROM file WHERE path = 'C:\\\\ProgramData\\\\osquery\\\\security_policy.json');"
         severity: "high"
         expected_result:
-          type: "existence"
-          description: "Policy should exist in SAM database. Values are in binary format and require parsing or use external tools (secedit, auditpol, PowerShell Get-LocalSecurityPolicy)."
+          type: "value_match"
+          description: "Lockout threshold should be > 0 and <= 10 (recommend 3-5). Requires Export-SecurityPolicy.ps1 scheduled task to be installed."
 
     assessment_criteria:
       pass: "Account lockout policy exists in SAM; verification requires external tool (secedit export or PowerShell)"
@@ -330,14 +330,14 @@ controls:
     queries:
       - query_id: "ia_3.5.7_password_complexity"
         pack: "ia_identification_authentication.conf"
-        query_name: "ia_password_policy"
-        description: "Check password complexity and minimum length requirements (NOTE: Stored in SAM binary format)"
+        query_name: "ia_password_policy_file"
+        description: "Check password complexity and minimum length requirements from exported security policy JSON file"
         rationale: "Strong password policies prevent unauthorized access via weak or easily guessed passwords"
-        query: "SELECT name, type, data FROM registry WHERE key = 'HKEY_LOCAL_MACHINE\\SAM\\SAM\\Domains\\Account' AND name = 'F';"
+        query: "SELECT JSON_EXTRACT(data, '$.password_policy.min_password_length') AS min_length, JSON_EXTRACT(data, '$.password_policy.password_complexity') AS complexity_enabled FROM (SELECT file.data AS data FROM file WHERE path = 'C:\\\\ProgramData\\\\osquery\\\\security_policy.json');"
         severity: "high"
         expected_result:
-          type: "existence"
-          description: "Password policy stored in SAM binary format. Use secedit to extract: PasswordComplexity=1, MinimumPasswordLength>=14"
+          type: "value_match"
+          description: "Password complexity should be 1 (enabled) and minimum length >= 14. Requires Export-SecurityPolicy.ps1 scheduled task to be installed."
 
     assessment_criteria:
       pass: "Password complexity enabled AND minimum length >= 14 characters (verify via secedit export)"
