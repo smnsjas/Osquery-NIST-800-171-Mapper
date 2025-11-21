@@ -292,6 +292,30 @@ function Write-ComplianceToConsole {
             }
         }
 
+        # Display evidence if present
+        if ($control.Evidence) {
+            Write-Host "    Evidence:" -ForegroundColor DarkCyan
+            foreach ($queryName in $control.Evidence.Keys) {
+                $results = $control.Evidence[$queryName]
+                if ($results -is [Array] -and $results.Count -gt 0) {
+                    Write-Host "      Query: $queryName ($($results.Count) rows)" -ForegroundColor DarkGray
+                    # Show first 5 rows
+                    $displayCount = [Math]::Min(5, $results.Count)
+                    for ($i = 0; $i -lt $displayCount; $i++) {
+                        $row = $results[$i]
+                        $rowStr = ($row.PSObject.Properties | ForEach-Object { "$($_.Name)=$($_.Value)" }) -join ", "
+                        Write-Host "        [$($i+1)] $rowStr" -ForegroundColor DarkGray
+                    }
+                    if ($results.Count -gt 5) {
+                        Write-Host "        ... and $($results.Count - 5) more rows" -ForegroundColor DarkGray
+                    }
+                } elseif ($results) {
+                    Write-Host "      Query: $queryName" -ForegroundColor DarkGray
+                    Write-Host "        $results" -ForegroundColor DarkGray
+                }
+            }
+        }
+
         Write-Host ""
     }
 
