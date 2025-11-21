@@ -325,14 +325,14 @@ function Write-ComplianceToConsole {
                     }
                 } elseif ($results -is [PSCustomObject]) {
                     # Handle policy objects
-                    Write-Host "      $queryName:" -ForegroundColor DarkGray
+                    Write-Host "      ${queryName}:" -ForegroundColor DarkGray
                     $results.PSObject.Properties | Where-Object {
                         -not [string]::IsNullOrWhiteSpace($_.Value)
                     } | ForEach-Object {
                         Write-Host "        $($_.Name): $($_.Value)" -ForegroundColor Gray
                     }
                 } elseif ($results) {
-                    Write-Host "      $queryName: $results" -ForegroundColor DarkGray
+                    Write-Host "      ${queryName}: $results" -ForegroundColor DarkGray
                 }
             }
         }
