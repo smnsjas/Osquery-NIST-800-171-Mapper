@@ -297,21 +297,42 @@ function Write-ComplianceToConsole {
             Write-Host "    Evidence:" -ForegroundColor DarkCyan
             foreach ($queryName in $control.Evidence.Keys) {
                 $results = $control.Evidence[$queryName]
+
                 if ($results -is [Array] -and $results.Count -gt 0) {
-                    Write-Host "      Query: $queryName ($($results.Count) rows)" -ForegroundColor DarkGray
-                    # Show first 5 rows
+                    Write-Host "      $queryName ($($results.Count) rows):" -ForegroundColor DarkGray
+
+                    # Show first 5 rows in readable format
                     $displayCount = [Math]::Min(5, $results.Count)
                     for ($i = 0; $i -lt $displayCount; $i++) {
                         $row = $results[$i]
-                        $rowStr = ($row.PSObject.Properties | ForEach-Object { "$($_.Name)=$($_.Value)" }) -join ", "
-                        Write-Host "        [$($i+1)] $rowStr" -ForegroundColor DarkGray
+                        Write-Host "        Row $($i+1):" -ForegroundColor DarkGray
+
+                        # Display each property on its own line, skip empty values
+                        $row.PSObject.Properties | Where-Object {
+                            -not [string]::IsNullOrWhiteSpace($_.Value)
+                        } | ForEach-Object {
+                            $value = if ($_.Value.Length -gt 60) {
+                                $_.Value.Substring(0, 57) + "..."
+                            } else {
+                                $_.Value
+                            }
+                            Write-Host "          $($_.Name): $value" -ForegroundColor Gray
+                        }
                     }
+
                     if ($results.Count -gt 5) {
-                        Write-Host "        ... and $($results.Count - 5) more rows" -ForegroundColor DarkGray
+                        Write-Host "        ... ($($results.Count - 5) more rows not shown)" -ForegroundColor DarkGray
+                    }
+                } elseif ($results -is [PSCustomObject]) {
+                    # Handle policy objects
+                    Write-Host "      $queryName:" -ForegroundColor DarkGray
+                    $results.PSObject.Properties | Where-Object {
+                        -not [string]::IsNullOrWhiteSpace($_.Value)
+                    } | ForEach-Object {
+                        Write-Host "        $($_.Name): $($_.Value)" -ForegroundColor Gray
                     }
                 } elseif ($results) {
-                    Write-Host "      Query: $queryName" -ForegroundColor DarkGray
-                    Write-Host "        $results" -ForegroundColor DarkGray
+                    Write-Host "      $queryName: $results" -ForegroundColor DarkGray
                 }
             }
         }
