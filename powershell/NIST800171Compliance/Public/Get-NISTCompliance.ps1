@@ -30,7 +30,7 @@ function Get-NISTCompliance {
     )
 
     process {
-        $scriptPath = Join-Path (Split-Path (Split-Path $PSScriptRoot -Parent) -Parent) "scripts\Invoke-ComplianceDataCollection.ps1"
+        $scriptPath = Join-Path (Split-Path (Split-Path (Split-Path $PSScriptRoot -Parent) -Parent) -Parent) "scripts\Invoke-ComplianceDataCollection.ps1"
 
         if ($Refresh -or -not (Test-Path $DataPath)) {
             Write-Verbose "Collecting fresh compliance data..."
