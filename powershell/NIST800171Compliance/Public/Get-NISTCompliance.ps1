@@ -39,12 +39,19 @@ function Get-NISTCompliance {
                 throw "Collection script not found at: $scriptPath"
             }
 
-            # Run the collection script
-            $params = @{ FilePath = $scriptPath; WindowStyle = 'Hidden'; Wait = $true }
-            if ($DataPath -ne "C:\ProgramData\osquery\nist_compliance_data.json") {
-                $params.ArgumentList = "-OutputPath `"$DataPath`""
+            # Run the collection script explicitly with PowerShell to avoid association issues
+            # and keep window visible to debug hangs/prompts
+            $params = @{ 
+                FilePath = 'powershell.exe'
+                ArgumentList = @("-ExecutionPolicy", "Bypass", "-File", $scriptPath)
+                Wait = $true 
             }
             
+            if ($DataPath -ne "C:\ProgramData\osquery\nist_compliance_data.json") {
+                $params.ArgumentList += "-OutputPath `"$DataPath`""
+            }
+            
+            Write-Verbose "Launching collection script: $scriptPath"
             Start-Process @params
             
             if (-not (Test-Path $DataPath)) {
